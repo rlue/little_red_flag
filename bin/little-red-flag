@@ -1,13 +1,16 @@
+#!/usr/bin/env ruby
+
+require 'little_red_flag'
 require 'net/imap'
 require 'net/ping'
+require 'listen'
+require 'sys-proctable'
+include Sys
 
 def initiate_idle(server, user, pass)
   server[:imap] = Net::IMAP.new(server[:addr], port: 993, ssl: true)
-  puts 'initialization complete.'
   server[:imap].authenticate('PLAIN', user, pass)
-  puts 'login complete.'
   server[:imap].examine('INBOX')
-  puts 'INBOX selected.'
   server[:imap].idle do |res|
     sync if %w(EXISTS FETCH).include?(res.name)
   end
@@ -24,14 +27,20 @@ end
 server = { addr: 'imap.gmail.com' }
 server[:ping] = Net::Ping::External.new(server[:addr])
 
+listener = Listen.to('/Users/rlue/.mail') do
+  break if ProcTable.ps.any? { |p| p.comm =~ /mbsync/ }
+  puts 'something happened!'
+end
+listener.ignore(%r{^\.notmuch(?:/|$)})
+listener.start
+
 loop do
   if server[:ping].ping
     # sync
     # initiate_idle(server[:addr])
-    puts "I'd totally be syncing right now"
-    puts "I'd totally be IDLING too"
+    puts "I'd totally be syncing+idling right now"
     loop do
-      puts "Now I'm going to bed for 5 seconds (#{Time.now.strftime('%H:%M:%S')})"
+      puts "Now I'm going to bed for 5 seconds"
       sleep 5
       break unless server[:ping].ping
     end
