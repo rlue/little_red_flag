@@ -1,0 +1,121 @@
+#!/usr/bin/env ruby
+
+require 'little_red_flag'
+require 'listen'
+require 'net/ping'
+require 'optparse'
+require 'sys-proctable'
+include Sys
+
+opts = {}
+OptionParser.new do |o|
+  o.banner = 'Usage: little-red-flag [options] CHANNEL[,...]'
+
+  o.on('-v', '--[no-]verbose', 'Run verbosely') do
+    opts[:verbose] = true
+  end
+
+  o.on('-a', '--all', 'Watch all mailboxes') do
+    opts[:all] = true
+  end
+
+  o.on('-g', '--global', 'Sync all mailboxes on each change') do
+    opts[:global] = true
+  end
+
+  o.on('-m', '--mail-agent NAME[,...]', Array, 'Specify mail agents') do |agents|
+    opts[:agents] = agents.map(&:to_sym)
+  end
+end.parse!
+
+puts "Parsing configuration files..." if opts[:verbose]
+
+mail_agents = opts[:agents] || LittleRedFlag::MailAgent.detect
+mail_agents.map! { |agent| LittleRedFlag::MailAgent.new(agent) }
+mra         = mail_agents.find(&:mra?)
+indexer     = mail_agents.find(&:indexer?)
+
+threads = []
+to_sync = Hash.new { |h, k| h[k] = [] }
+mailstores = mra.stores
+
+puts "Performing initial sync..." if opts[:verbose]
+system(mra.command)
+system(indexer.command) if indexer
+
+listener = Listen.to(*mailstores) do |mod, add, rm|
+  unless ProcTable.ps.any? { |p| p.comm =~ /#{mra.command.split.first}/ }
+    changes = [mod, add, rm].flatten
+    changes.map { |f| LittleRedFlag::Maildir.of(f) }.uniq
+           .map { |mdir| mra.channel_for(mdir) }.uniq
+           .each do |channel|
+             account = mra.account_for(channel)
+             if to_sync[account.label.to_sym].empty?
+               threads << Thread.new do
+                 loop do
+                   sleep 10
+                   break if Net::Ping::External.new(account.host).ping
+                 end
+                 to_sync[account.label.to_sym].uniq!
+                 if opts[:global]
+                   system(mra.command)
+                   to_sync[account.label.to_sym].clear
+                 else
+                   system(mra.command(to_sync[account.label.to_sym].shift)) \
+                     until to_sync[account.label.to_sym].empty?
+                 end
+                 system(indexer.command) if indexer
+               end
+             end
+
+             to_sync[account.label.to_sym] << channel
+             end
+           end
+end
+mail_agents.each do |agent|
+  listener.ignore(agent.ignore_pat) if agent.respond_to?(:ignore_pat)
+end
+listener.start
+
+mailstores.each { |store| puts "Watching for local changes in #{store}" } if opts[:verbose]
+
+inboxes = []
+if opts[:all]
+  mra.config.channels.each do |channel|
+    inboxes.push(channel.inboxes).flatten!
+    inboxes.uniq!
+  end
+elsif ARGV.any?
+  ARGV.each do |name|
+    channel = [mra.config.channels, mra.config.groups].flatten.find { |channel| channel.label == name }
+    raise ArgumentError, "#{name}: no such channel or group" unless channel
+    inboxes.push(channel.inboxes).flatten!
+  end
+else
+  inboxes.push(mra.config.imapstores.map { |store| store.inbox }).flatten!
+end
+
+inboxes.each do |inbox|
+  threads << inbox.listen do |res|
+    if res.respond_to?(:name) && res.name == 'EXISTS'
+      system(mra.command(opts[:global] ? :all : inbox.channel))
+      system(indexer.command) if indexer
+    end
+  end
+
+  puts "Watching for remote changes in #{inbox.account.label}:#{inbox.folder}" if opts[:verbose]
+end
+
+sleep
+
+# Trap ^C 
+Signal.trap("INT") { 
+  threads.each { |thr| Thread.kill(thr) }
+  exit
+}
+
+# Trap `Kill`
+Signal.trap("TERM") {
+  threads.each { |thr| Thread.kill(thr) }
+  exit
+}
