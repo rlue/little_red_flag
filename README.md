@@ -19,7 +19,7 @@ $ gem install little_red_flag
 Usage
 -----
 
-Call `littleredflag` with same arguments you would use for mbsync:
+For best results, run Little Red Flag on login. Call `littleredflag` with same arguments you would use for mbsync:
 
 ```bash
 $ littleredflag -a
