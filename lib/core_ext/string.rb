@@ -25,6 +25,6 @@ class String
   end
 
   def unescape
-    self.gsub(/[\\"]/, '')
+    self.gsub(/^"(.*)"$/, '\1').gsub(/\\/, '')
   end
 end
