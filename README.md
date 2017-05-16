@@ -74,7 +74,9 @@ fi
 Config
 ------
 
-Little Red Flag does not accept a configuration dotfile. It extracts the relevant settings from the `.mbsyncrc` file.
+Little Red Flag does not accept a configuration dotfile. It extracts the relevant settings from the `~/.mbsyncrc` file, and detects mu and notmuch on the basis of their respective dotfiles, as well.
+
+Currently, Little Red Flag only looks for these dotfiles in their default location. Future versions may support a command line option to specify config file locations.
 
 License
 -------
