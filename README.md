@@ -19,7 +19,7 @@ $ gem install little_red_flag
 Usage
 -----
 
-For best results, run Little Red Flag on login. Call `littleredflag` with same arguments you would use for mbsync:
+Call `littleredflag` with same arguments you would use for mbsync:
 
 ```bash
 $ littleredflag -a
@@ -47,6 +47,27 @@ $ littleredflag inboxes
 Locally, Little Red Flag watches paths specified in `MaildirStore` sections of your `.mbsyncrc`, and thus will detect local changes in _any_ mail folder.
 
 **Synchronizations are performed only on mail folders where changes are detected.** If you’re only monitoring your INBOX, receiving new mail to it will not cause any other folders to sync. (This behavior can be reversed with the `-g` command line option.)
+
+### `.bash_profile`
+
+For best results, run Little Red Flag on login.
+
+One way to do that is to add it to your `.bash_profile`. The following script will launch Little Red Flag idempotently (that is, it will only launch if there is no other instance of Little Red Flag running that was originated by this same script):
+
+```bash
+mkdir -p "$HOME/tmp"
+PIDFILE="$HOME/tmp/littleredflag.pid"
+
+if [ -e "${PIDFILE}" ] && (ps -u $(whoami) -opid= |
+                           grep "$(cat ${PIDFILE})" &> /dev/null); then
+  :
+else
+  littleredflag > "$HOME/tmp/littleredflag.log" 2>&1 &
+
+  echo $! > "${PIDFILE}"
+  chmod 644 "${PIDFILE}"
+fi
+```
 
 Config
 ------
