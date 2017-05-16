@@ -7,7 +7,9 @@ Requires [isync][isync].
 
 **isync** (`mbsync`) is a command-line tool for synchronizing IMAP and local Maildir mailboxes. It’s faster and stabler than the next most popular alternative (OfflineIMAP), but still must be invoked manually. **Little Red Flag** keeps an eye on your mailboxes and runs the appropriate `mbsync` command anytime changes occur, **whether locally or remotely**. It also detects the presence of `mu` / `notmuch` mail indexers, and re-indexes after each sync.
 
-Local changes are monitored using [listen][listen]; remote changes are monitored with IMAP IDLE. (In fact, it would be ideal if isync implemented this functionality itself, but according to the project maintainer, such plans are [vague and indefinitely postponed][postponed]. If I knew the first thing about C, I’d have taken a stab at improving isync myself; this utility is the next best thing I knew how to make.)
+Little Red Flag is smart: it only syncs once it’s confirmed that the specified IMAP server is reachable. Remote changes are monitored with IMAP IDLE, and dropped connections are renewed within 60 seconds. 
+
+(In fact, it would be ideal if isync implemented this functionality itself, but according to the project maintainer, such plans are [vague and indefinitely postponed][postponed]. If I knew the first thing about C, I’d have taken a stab at improving isync myself; this utility is the next best thing I knew how to make.)
 
 Installation
 ------------
