@@ -48,7 +48,7 @@ Locally, Little Red Flag watches paths specified in `MaildirStore` sections of y
 
 **Synchronizations are performed only on mail folders where changes are detected.** If you’re only monitoring your INBOX, receiving new mail to it will not cause any other folders to sync. (This behavior can be reversed with the `-g` command line option.)
 
-### `.bash_profile`
+### In `.bash_profile`
 
 For best results, run Little Red Flag on login.
 
