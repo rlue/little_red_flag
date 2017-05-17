@@ -25,6 +25,5 @@ Gem::Specification.new do |s|
   s.require_paths = ['lib']
   s.required_ruby_version = '>= 2.2.5'
   s.add_runtime_dependency 'listen', '~> 3.1'
-  s.add_runtime_dependency 'net-ping', '~> 2.0'
   s.add_runtime_dependency 'sys-proctable', '~> 1.1'
 end

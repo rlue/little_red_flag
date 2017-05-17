@@ -1,5 +1,4 @@
 require 'net/imap'
-require 'net/ping'
 
 module LittleRedFlag
   module MailAgent
@@ -12,7 +11,7 @@ module LittleRedFlag
           :tunnel, :authmechs, :ssltype, :sslversions, :systemcertificates,
           :certificatefile, :pipelinedepth, :connections) do
             def connect
-              until Net::Ping::External.new(host).ping
+              until Ping.new(host).ping
                 10.downto(1) do |i|
                   printf "#{host} unreachable. Trying again in #{i}s... \r"
                   sleep 1

@@ -1,4 +1,5 @@
 require 'core_ext/string'
+require 'little_red_flag/ping'
 require 'little_red_flag/mail_agent'
 require 'little_red_flag/mail_agent/mbsync/config.rb'
 require 'little_red_flag/mail_agent/mbsync'
