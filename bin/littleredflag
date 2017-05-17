@@ -42,9 +42,9 @@ indexer     = mail_agents.find(&:indexer?)
 to_sync = Hash.new { |h, k| h[k] = [] }
 mailstores = mra.stores
 
-# puts "#{timestamp} Performing initial sync..." if opts[:verbose]
-# system(mra.command)
-# system(indexer.command) if indexer
+puts "#{timestamp} Performing initial sync..." if opts[:verbose]
+system(mra.command)
+system(indexer.command) if indexer
 
 listener = Listen.to(*mailstores) do |mod, add, rm|
   unless ProcTable.ps.any? { |p| p.comm =~ /#{mra.command.split.first}/ }
