@@ -3,6 +3,7 @@
 require 'little_red_flag'
 require 'listen'
 require 'optparse'
+require 'pry'
 require 'sys-proctable'
 include Sys
 
@@ -38,13 +39,12 @@ mail_agents.map! { |agent| LittleRedFlag::MailAgent.new(agent) }
 mra         = mail_agents.find(&:mra?)
 indexer     = mail_agents.find(&:indexer?)
 
-threads = []
 to_sync = Hash.new { |h, k| h[k] = [] }
 mailstores = mra.stores
 
-puts "#{timestamp} Performing initial sync..." if opts[:verbose]
-system(mra.command)
-system(indexer.command) if indexer
+# puts "#{timestamp} Performing initial sync..." if opts[:verbose]
+# system(mra.command)
+# system(indexer.command) if indexer
 
 listener = Listen.to(*mailstores) do |mod, add, rm|
   unless ProcTable.ps.any? { |p| p.comm =~ /#{mra.command.split.first}/ }
@@ -55,7 +55,7 @@ listener = Listen.to(*mailstores) do |mod, add, rm|
              puts "#{timestamp} Local changes detected" if opts[:verbose]
              account = mra.account_for(channel)
              if to_sync[account.label.to_sym].empty?
-               threads << Thread.new do
+               Thread.new do
                  loop do
                    sleep 10
                    break if LittleRedFlag::Ping.new(account.host).ping
@@ -87,7 +87,7 @@ mail_agents.each do |agent|
 end
 listener.start
 
-mailstores.each { |store| puts "Watching for local changes in #{store}" } if opts[:verbose]
+mailstores.each { |store| puts "#{timestamp} Watching for local changes in #{store}" } if opts[:verbose]
 
 inboxes = []
 if opts[:all]
@@ -105,41 +105,77 @@ else
   inboxes.push(mra.config.imapstores.map { |store| store.inbox }).flatten!
 end
 
+channel_threads = {}
+
 inboxes.each do |inbox|
-  name = inbox.folder.split('/').last.to_sym
-  inbox.account.connections[name] = inbox.account.connect
-  inbox.account.connections[name].examine(inbox.folder)
-  threads << Thread.new do
+  Thread.new do
+    name = inbox.channel.to_sym
+    inbox.account.connections[name] = inbox.account.connect
+    inbox.account.connections[name].examine(inbox.folder)
     loop do
-      inbox.account.connections[name].idle(60) do |res|
-        res_data = res.data.respond_to?(:text) ? res.data.text : res.name
-        puts "#{timestamp} IDLE response received on #{inbox.channel}:#{inbox.folder}: #{res_data}" if opts[:verbose]
-        if res.respond_to?(:name) && %w(EXISTS FETCH).include?(res.name)
-          if opts[:global]
-            system(mra.command)
-            puts "#{timestamp} All channels successfully synced" if opts[:verbose]
-          else
-            system(mra.command(inbox.channel))
-            puts "#{timestamp} Channel #{inbox.channel} successfully synced" if opts[:verbose]
+      channel = mra.config.channels.find { |channel| channel.label == inbox.channel.split(':').first }
+      if LittleRedFlag::Ping.new(inbox.account.host).ping
+        if channel_threads.keys.include?(name)
+          if channel.behind?
+            channel.caught_up!
+            puts "#{timestamp} Syncing channel #{channel.label} after dropped connection..." if opts[:verbose]
+            if opts[:global]
+              system(mra.command)
+              puts "#{timestamp} All channels successfully synced" if opts[:verbose]
+            else
+              system(mra.command(channel.label))
+              puts "#{timestamp} Channel #{channel.label} successfully synced" if opts[:verbose]
+            end
+            system(indexer.command) if indexer
+            puts "#{timestamp} #{indexer.name} index rebuilt" if opts[:verbose]
+
+            Thread.kill(channel_threads[name])
+            channel_threads[name] = Thread.new do
+              inbox.account.connections[name].idle do |res|
+                res_data = res.data.respond_to?(:text) ? res.data.text : res.name
+                puts "#{timestamp} IDLE response received on #{inbox.channel}:#{inbox.folder}: #{res_data}" if opts[:verbose]
+                if res.respond_to?(:name) && %w(EXISTS FETCH).include?(res.name)
+                  if opts[:global]
+                    system(mra.command)
+                    puts "#{timestamp} All channels successfully synced" if opts[:verbose]
+                  else
+                    system(mra.command(inbox.channel))
+                    puts "#{timestamp} Channel #{inbox.channel} successfully synced" if opts[:verbose]
+                  end
+                  system(indexer.command) if indexer
+                  puts "#{timestamp} #{indexer.name} index rebuilt" if opts[:verbose]
+                end
+              end
+            end
           end
-          system(indexer.command) if indexer
-          puts "#{timestamp} #{indexer.name} index rebuilt" if opts[:verbose]
+        else
+          channel_threads[name] = Thread.new do
+            inbox.account.connections[name].idle do |res|
+              res_data = res.data.respond_to?(:text) ? res.data.text : res.name
+              puts "#{timestamp} IDLE response received on #{inbox.channel}:#{inbox.folder}: #{res_data}" if opts[:verbose]
+              if res.respond_to?(:name) && %w(EXISTS FETCH).include?(res.name)
+                if opts[:global]
+                  system(mra.command)
+                  puts "#{timestamp} All channels successfully synced" if opts[:verbose]
+                else
+                  system(mra.command(inbox.channel))
+                  puts "#{timestamp} Channel #{inbox.channel} successfully synced" if opts[:verbose]
+                end
+                system(indexer.command) if indexer
+                puts "#{timestamp} #{indexer.name} index rebuilt" if opts[:verbose]
+              end
+            end
+          end
         end
+
+        sleep 60
+      else
+        puts "#{timestamp} IDLE connection lost" if (opts[:verbose] && !channel.behind?)
+        channel.behind!
+        sleep 60
       end
     end
   end
 end
 
 sleep
-
-# Trap ^C 
-Signal.trap("INT") { 
-  threads.each { |thr| Thread.kill(thr) }
-  exit
-}
-
-# Trap `Kill`
-Signal.trap("TERM") {
-  threads.each { |thr| Thread.kill(thr) }
-  exit
-}

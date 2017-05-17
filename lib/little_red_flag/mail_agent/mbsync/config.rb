@@ -56,6 +56,18 @@ module LittleRedFlag
             def account
               remotestore.account
             end
+
+            def behind?
+              @behind
+            end
+
+            def behind!
+              @behind = true
+            end
+
+            def caught_up!
+              @behind = false
+            end
           end
         Group        = Struct.new(:label, :channels, :inboxes)
         Inbox        = Struct.new(:account, :folder, :channel) do
