@@ -18,7 +18,7 @@ module LittleRedFlag
                 end
                 puts "#{host} unreachable. Trying again...          "
               end
-              imap = Net::IMAP.new(host, port: port, ssl: (ssltype.downcase == 'imaps'))
+              imap = Net::IMAP.new(host, port: port, ssl: (ssltype && (ssltype.downcase == 'imaps')))
               @auth ||= %w(LOGIN PLAIN) & imap.capability
                                               .select { |cap| cap['AUTH='] }
                                               .map { |auth| auth.sub('AUTH=','').upcase }
