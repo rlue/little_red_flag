@@ -2,7 +2,6 @@
 
 require 'little_red_flag'
 require 'listen'
-require 'net/ping'
 require 'optparse'
 require 'sys-proctable'
 include Sys
@@ -28,7 +27,11 @@ OptionParser.new do |o|
   end
 end.parse!
 
-puts "Parsing configuration files..." if opts[:verbose]
+def timestamp
+  Time.now.strftime("[%v %X]")
+end
+
+puts "#{timestamp} Parsing configuration files..." if opts[:verbose]
 
 mail_agents = opts[:agents] || LittleRedFlag::MailAgent.detect
 mail_agents.map! { |agent| LittleRedFlag::MailAgent.new(agent) }
@@ -39,7 +42,7 @@ threads = []
 to_sync = Hash.new { |h, k| h[k] = [] }
 mailstores = mra.stores
 
-puts "Performing initial sync..." if opts[:verbose]
+puts "#{timestamp} Performing initial sync..." if opts[:verbose]
 system(mra.command)
 system(indexer.command) if indexer
 
@@ -49,28 +52,35 @@ listener = Listen.to(*mailstores) do |mod, add, rm|
     changes.map { |f| LittleRedFlag::Maildir.of(f) }.uniq
            .map { |mdir| mra.channel_for(mdir) }.uniq
            .each do |channel|
+             puts "#{timestamp} Local changes detected" if opts[:verbose]
              account = mra.account_for(channel)
              if to_sync[account.label.to_sym].empty?
                threads << Thread.new do
                  loop do
                    sleep 10
-                   break if Net::Ping::External.new(account.host).ping
+                   break if LittleRedFlag::Ping.new(account.host).ping
                  end
                  to_sync[account.label.to_sym].uniq!
                  if opts[:global]
                    system(mra.command)
                    to_sync[account.label.to_sym].clear
+                   puts "#{timestamp} All channels successfully synced" if opts[:verbose]
                  else
-                   system(mra.command(to_sync[account.label.to_sym].shift)) \
-                     until to_sync[account.label.to_sym].empty?
+                   until to_sync[account.label.to_sym].empty?
+                     c = to_sync[account.label.to_sym].shift
+                     system(mra.command(c))
+                     puts "#{timestamp} Channel #{c} successfully synced" if opts[:verbose]
+                   end
                  end
                  system(indexer.command) if indexer
+                 puts "#{timestamp} #{indexer.name} index rebuilt" if opts[:verbose]
                end
              end
 
              to_sync[account.label.to_sym] << channel
-             end
+             puts "#{timestamp} Channel #{channel} added to sync queue" if opts[:verbose]
            end
+  end
 end
 mail_agents.each do |agent|
   listener.ignore(agent.ignore_pat) if agent.respond_to?(:ignore_pat)
@@ -96,14 +106,28 @@ else
 end
 
 inboxes.each do |inbox|
-  threads << inbox.listen do |res|
-    if res.respond_to?(:name) && res.name == 'EXISTS'
-      system(mra.command(opts[:global] ? :all : inbox.channel))
-      system(indexer.command) if indexer
+  name = inbox.folder.split('/').last.to_sym
+  inbox.account.connections[name] = inbox.account.connect
+  inbox.account.connections[name].examine(inbox.folder)
+  threads << Thread.new do
+    loop do
+      inbox.account.connections[name].idle(60) do |res|
+        res_data = res.data.respond_to?(:text) ? res.data.text : res.name
+        puts "#{timestamp} IDLE response received on #{inbox.channel}:#{inbox.folder}: #{res_data}" if opts[:verbose]
+        if res.respond_to?(:name) && %w(EXISTS FETCH).include?(res.name)
+          if opts[:global]
+            system(mra.command)
+            puts "#{timestamp} All channels successfully synced" if opts[:verbose]
+          else
+            system(mra.command(inbox.channel))
+            puts "#{timestamp} Channel #{inbox.channel} successfully synced" if opts[:verbose]
+          end
+          system(indexer.command) if indexer
+          puts "#{timestamp} #{indexer.name} index rebuilt" if opts[:verbose]
+        end
+      end
     end
   end
-
-  puts "Watching for remote changes in #{inbox.account.label}:#{inbox.folder}" if opts[:verbose]
 end
 
 sleep
