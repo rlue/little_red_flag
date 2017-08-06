@@ -4,6 +4,6 @@ gemspec
 
 group :development do
   gem 'pry'
-  gem 'rspec'
+  gem 'rspec', '~> 3.6'
   gem 'rubocop', require: false
 end

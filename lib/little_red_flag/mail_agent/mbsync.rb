@@ -6,13 +6,11 @@ module LittleRedFlag
 
       attr_reader :config
 
-      def initialize
-        @config = Config.new(dotfile)
+      def initialize(config = dotfile)
+        @config = Config::RCFile.new(config)
       end
 
-      def mra?
-        true
-      end
+      def mra?; true end
 
       def command(channel = :all)
         'mbsync ' + (channel == :all ? '-a' : channel)
@@ -60,6 +58,26 @@ module LittleRedFlag
           config.channels.find { |c| channel.split(':').first == c.label }.account
         end
       end
+
+      # TODO: REFACTOR CONFIG CLASS CRUFT
+      # 1. create structs from all the config sections
+      # 2. populate the instance variables — on the CONFIG object,
+      #    but now we're thinking of making each property a direct 
+      #    attribute of the mbsync object...?
+      # 3. postprocess
+      #
+      # # Takes a 3D array from #arrayify and returns an array of structs,
+      # # removing any global options
+      # def structify(config)
+      #   arrayify(config).map! do |section|
+      #     struct_name, label = *section.shift
+      #     section = hashify(section)
+      #     struct = self.const_get(struct_name)
+      #     struct.new(label, *section.values_at(*struct.members.drop(1)))
+      #   end
+      #
+      #   config.select { |section| section.respond_to?(:label) }
+      # end
     end
   end
 end

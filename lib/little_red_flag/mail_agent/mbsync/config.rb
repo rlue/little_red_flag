@@ -1,136 +1,14 @@
-require 'net/imap'
-
 module LittleRedFlag
   module MailAgent
     class Mbsync
-      # Stores .mbsyncrc configuration file data
-      class Config
-        CASE_SENSITIVE = %w(path inbox master slave pattern patterns).freeze
-
-        Imapaccount = Struct.new(:label, :host, :port, :user, :pass, :passcmd,
-          :tunnel, :authmechs, :ssltype, :sslversions, :systemcertificates,
-          :certificatefile, :pipelinedepth, :connections) do
-            def connect
-              until Ping.new(host).ping
-                10.downto(1) do |i|
-                  printf "#{host} unreachable. Trying again in #{i}s... \r"
-                  sleep 1
-                end
-                puts "#{host} unreachable. Trying again...          "
-              end
-              imap = Net::IMAP.new(host, port: port, ssl: (ssltype && (ssltype.downcase == 'imaps')))
-              @auth ||= %w(LOGIN PLAIN) & imap.capability
-                                              .select { |cap| cap['AUTH='] }
-                                              .map { |auth| auth.sub('AUTH=','').upcase }
-              imap.authenticate(@auth.first, user, pass || `#{passcmd.unescape}`.chomp)
-              imap
-            end
-          end
-        Imapstore = Struct.new(:label, :path, :maxsize, :mapinbox, :flatten,
-          :trash, :trashnewonly, :trashremotenew, :account, :usenamespace,
-          :pathdelimiter, :path_of, :inbox)
-        Maildirstore = Struct.new(:label, :path, :maxsize, :mapinbox, :flatten,
-          :trash, :trashnewonly, :trashremotenew, :altmap, :inbox,
-          :infodelimiter, :path_of)
-        Channel = Struct.new(:label, :master, :slave, :patterns, :maxsize,
-          :maxmessages, :expireunread, :sync, :create, :remove, :expunge,
-          :copyarrivaldate, :syncstate, :localstore, :remotestore, :inboxes) do
-            def localpath
-              localstore.path_of[label.to_sym]
-            end
-
-            def localpath=(path)
-              localstore.path_of ||= {}
-              localstore.path_of[label.to_sym] = path
-            end
-
-            def remotepath
-              remotestore.path_of[label.to_sym]
-            end
-
-            def remotepath=(path)
-              remotestore.path_of ||= {}
-              remotestore.path_of[label.to_sym] = path
-            end
-
-            def account
-              remotestore.account
-            end
-
-            def behind?
-              @behind
-            end
-
-            def behind!
-              @behind = true
-            end
-
-            def caught_up!
-              @behind = false
-            end
-          end
-        Group        = Struct.new(:label, :channels, :inboxes)
-        Inbox        = Struct.new(:account, :folder, :channel) do
-          def listen(interval=60, &block)
-            name = folder.split('/').last.to_sym
-            account.connections[name] = account.connect
-            account.connections[name].examine(folder)
-            Thread.new do
-              loop { account.connections[name].idle(interval, &block) }
-            end
-          end
-        end
-
+      # Parses .mbsyncrc configuration files
+      # and exposes their contents as instance methods
+      module Config
         def initialize(dotfile)
-          raw_data = sanitize(File.read(dotfile))
-          settings = structify(arrayify(raw_data))
+          raw_conf = self.class.sanitize(File.read(dotfile))
+          settings = self.class.structify(raw_conf)
           populate_instance_variables(settings)
-          postprocess
-        end
-
-        private
-
-        # removes comments / normalizes whitespace
-        def sanitize(config)
-          config.gsub(/^#.*\n/, '').gsub(/\n+(?=\n\n)/, '').strip
-        end
-
-        # Takes text from #sanitize and returns a 3D array of SECTION arrays
-        # of the form [["OPTION", "VALUE"], ["OPTION", "VALUE"]...]
-        def arrayify(config)
-          config.split("\n\n").map! do |section|
-            section.split("\n").map! do |setting|
-              key, val = *setting.split(/\s+/, 2)
-              key.downcase!
-              val.downcase! unless CASE_SENSITIVE.include?(key)
-              [key, val]
-            end
-          end
-        end
-
-        # Takes a 3D array from #arrayify and returns an array of structs,
-        # removing any global options
-        def structify(config)
-          config.map! do |section|
-            struct_name, label = *section.shift
-            next unless self.class.const_defined?(struct_name.capitalize!)
-            section = hashify(section)
-            struct = self.class.const_get(struct_name)
-            struct.new(label, *section.values_at(*struct.members.drop(1)))
-          end
-
-          config.select { |section| section.respond_to?(:label) }
-        end
-
-        # Converts a single section's 2D array of settings into a hash,
-        # collecting multiple values with the same key into arrays
-        # and consolidating `Channel[s]`/`Pattern[s]` keywords
-        def hashify(section)
-          section.each.with_object({}) do |setting, hash|
-            key, val = *setting
-            key = (%w(channel pattern).include?(key) ? "#{key}s" : key).to_sym
-            hash[key] = hash.key?(key) ? [hash[key], val].flatten : val
-          end
+          # postprocess
         end
 
         def populate_instance_variables(var_array)

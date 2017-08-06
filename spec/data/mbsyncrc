@@ -1,0 +1,133 @@
+# ACCOUNTS ====================================================================
+
+# ryan.lue@gmail.com ----------------------------------------------------------
+IMAPAccount gmail
+Host imap.gmail.com
+Port 993
+User ryan.lue
+PassCmd "security find-internet-password -l ryan.lue@gmail.com -w"
+AuthMechs LOGIN
+SSLType IMAPS
+SSLVersions TLSv1.2
+
+# hello@ryanlue.com -----------------------------------------------------------
+IMAPAccount hello
+Host mail.privateemail.com
+Port 993
+User hello@ryanlue.com
+PassCmd "security find-internet-password -l hello@ryanlue.com -w"
+AuthMechs LOGIN
+SSLType IMAPS
+SSLVersions TLSv1.2
+
+# lists@ryanlue.com -----------------------------------------------------------
+IMAPAccount lists
+Host mail.privateemail.com
+Port 993
+User lists@ryanlue.com
+PassCmd "security find-internet-password -l lists@ryanlue.com -w"
+AuthMechs LOGIN
+SSLType IMAPS
+SSLVersions TLSv1.2
+
+# STORES ======================================================================
+
+IMAPStore gmail
+Account gmail
+
+IMAPStore hello
+Account hello
+
+IMAPStore lists
+Account lists
+
+MaildirStore local
+Path ~/Mail/
+Inbox ~/Mail/\<\<Gmail\>\>
+Flatten "."
+
+# CHANNELS ====================================================================
+
+Channel hello
+Master :hello:INBOX
+Slave :local:<<Hello>>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel lists
+Master :lists:INBOX
+Slave :local:<Lists>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-inbox
+Master :gmail:INBOX
+Slave :local:<<Gmail>>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-drafts
+Master :gmail:"[Gmail]/Drafts"
+Slave :local:<Drafts>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-sent
+Master :gmail:"[Gmail]/Sent Mail"
+Slave :local:<Sent>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-spam
+Master :gmail:"[Gmail]/Spam"
+Slave :local:<Spam>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-deferred
+Master :gmail:"Deferred"
+Slave :local:<Deferred>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-trash
+Master :gmail:"[Gmail]/Trash"
+Slave :local:<Trash>
+Create Slave
+Expunge Both
+SyncState *
+
+Channel gmail-labels
+Master :gmail:
+Slave :local:
+Patterns * !"%" ![Gmail]/*
+Create Both
+Remove Both
+Expunge Both
+SyncState *
+
+# GROUPS ======================================================================
+
+Group inboxes
+Channel hello
+Channel lists
+Channel gmail-inbox
+Channel gmail-drafts
+Channel gmail-sent
+Channel gmail-deferred
+
+Group gmail
+Channel gmail-inbox
+Channel gmail-drafts
+Channel gmail-sent
+Channel gmail-spam
+Channel gmail-deferred
+Channel gmail-trash
+Channel gmail-labels
