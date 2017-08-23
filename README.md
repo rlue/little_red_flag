@@ -1,3 +1,8 @@
+This package is broken.
+=======================
+
+It needs to be completely rebuilt, which will probably not happen before Thanksgiving 2017. Sorry for the inconvenience.
+
 📬 Little Red Flag
 ==================
 
