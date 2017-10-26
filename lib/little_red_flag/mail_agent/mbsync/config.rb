@@ -5,7 +5,7 @@ module LittleRedFlag
     class Mbsync
       # Stores .mbsyncrc configuration file data
       class Config
-        CASE_SENSITIVE = %w(path inbox master slave pattern patterns).freeze
+        CASE_SENSITIVE = %w(path inbox master slave pattern patterns pass).freeze
 
         Imapaccount = Struct.new(:label, :host, :port, :user, :pass, :passcmd,
           :tunnel, :authmechs, :ssltype, :sslversions, :systemcertificates,
