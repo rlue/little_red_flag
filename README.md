@@ -1,7 +1,65 @@
-This package is broken.
-=======================
+This project is broken and has been abandoned.
+==============================================
 
-It needs to be completely rebuilt, which will probably not happen before Thanksgiving 2017. Sorry for the inconvenience.
+If you are looking for an alternative
+(_i.e.,_ a daemon / background service to monitor your inbox
+and trigger an IMAP sync utility whenever new mail arrives),
+try [gnubiff](http://gnubiff.sourceforge.net/).
+
+Gnubiff’s _intended purpose_ is to provide a GUI widget
+that lives in the corner of your screen
+and shows a preview of new emails as they come in.
+However, you can run it in **headless mode**
+and configure it to run whatever command you want
+when a new incoming message has been detected
+(_e.g.,_ `mbsync -a`).
+
+You’ll have to launch it in GUI mode at least once
+to add your IMAP credentials,
+and then manually edit the config file
+to tell it how to fetch your mail:
+
+```xml
+<!-- ~/.gnubiffrc -->
+
+<configuration-file>
+  <general>
+    <parameter name="newmail_command" value="pgrep mbsync >/dev/null || mbsync --verbose --all > /home/rlue/log/mbsync.log" />
+  </general>
+</configuration-file>
+```
+
+> **Note:**
+> If your mail fetching utility invokes a password manager like [pass][]
+> to avoid storing passwords in plain text,
+> you might have to set some environment variables
+> at the start of the `newmail_command` above, like:
+>
+> ```sh
+> value="export GNUPGHOME='/home/rlue/.config/gnupg'; export PASSWORD_STORE_DIR='/home/rlue/.config/pass'; pgrep ..."
+> ```
+
+Then, you can set it up and launch it as a systemd service:
+
+```service
+# ~/.local/share/systemd/user/gnubiff.service
+
+[Unit]
+Description=Gnubiff Headless Email Fetcher
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/gnubiff --noconfigure --nogui
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+$ systemctl --user enable gnubiff
+$ systemctl --user start gnubiff
+```
 
 📬 Little Red Flag
 ==================
@@ -90,6 +148,7 @@ The MIT License (MIT)
 
 Copyright © 2017 Ryan Lue
 
+[pass]: https://www.passwordstore.org/
 [isync]: http://isync.sourceforge.net/
 [listen]: https://github.com/guard/listen
 [postponed]: https://sourceforge.net/p/isync/feature-requests/8/#173f
